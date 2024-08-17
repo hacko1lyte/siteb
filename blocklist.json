@@ -1,4 +1,5 @@
-[
+{
+  "blocked_sites": [
     "*://*.pornhub.com/*",
     "*://*.xvideos.com/*",
     "*://*.xnxx.com/*",
@@ -64,4 +65,4 @@
     "*://*.rule34.xxx/*",
     "*://*.r34.com/*"
   ]
-  
+}

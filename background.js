@@ -1,59 +1,53 @@
-// URL of the remote block list
-const blockListUrl = 'https://hacko1lyte.github.io/siteb/blocklist.json';
-
-// Cache for the block list
-let blockListCache = [];
-
-// Function to fetch and apply the blocklist
-async function fetchAndApplyBlocklist() {
+async function loadBlocklist() {
+  // Replace this URL with your actual external blocklist URL
+  const blocklistUrl = 'https://hacko1lyte.github.io/siteb/blocklist.json';
+  
   try {
-    // Fetch the block list from the remote source
-    const response = await fetch(blockListUrl);
+    const response = await fetch(blocklistUrl);
+
+    // Check if the response is ok (status 200)
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // Parse the block list
-    const blockList = await response.json();
+    const data = await response.json();
 
-    // Ensure blockList is an array of URLs or patterns
-    if (!Array.isArray(blockList)) {
-      throw new Error('Block list is not an array.');
+    // Ensure that the blocked_sites property exists and is an array
+    if (!data.blocked_sites || !Array.isArray(data.blocked_sites)) {
+      throw new Error('Invalid blocklist format: blocked_sites is missing or not an array');
     }
 
-    // Update the cache
-    blockListCache = blockList;
-
-    console.log('Blocklist applied successfully.');
+    return data.blocked_sites.map(site => `*://${site}/*`);
   } catch (error) {
-    console.error('Error fetching or applying the blocklist:', error);
+    console.error('Error loading blocklist:', error);
+    return []; // Return an empty array if there's an error
   }
 }
 
-// Request handler function
-function blockRequestHandler(details) {
-  const url = new URL(details.url);
-  const isBlocked = blockListCache.some(domain => url.hostname.includes(domain));
+async function setupBlockingRules() {
+  const blockedSites = await loadBlocklist();
 
-  return { cancel: isBlocked }; // Block the request if it's in the block list
+  if (blockedSites.length === 0) {
+    console.warn('No sites to block. Please check the blocklist.');
+    return; // Exit if there are no sites to block
+  }
+
+  const rules = blockedSites.map(site => ({
+    id: site,
+    priority: 1,
+    action: { type: "block" },
+    condition: {
+      urlFilter: site,
+      resourceTypes: ["main_frame"]
+    }
+  }));
+
+  // Update dynamic rules
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    addRules: rules,
+    removeRuleIds: blockedSites
+  });
 }
 
-// Event listener for the extension installation
-chrome.runtime.onInstalled.addListener(() => {
-  fetchAndApplyBlocklist(); // Fetch and apply the block list when installed
-});
-
-// Event listener for browser startup
-chrome.runtime.onStartup.addListener(() => {
-  fetchAndApplyBlocklist(); // Fetch and apply the block list when the browser starts
-});
-
-// Event listener for web requests
-chrome.webRequest.onBeforeRequest.addListener(
-  blockRequestHandler,
-  { urls: ["<all_urls>"] }, // Apply to all URLs
-  ["blocking"]
-);
-
-// If you need to fetch updates manually, you can trigger fetchAndApplyBlocklist() 
-// via a message or some other event if needed
+// Set up the blocking rules when the service worker is installed
+chrome.runtime.onInstalled.addListener(setupBlockingRules);
