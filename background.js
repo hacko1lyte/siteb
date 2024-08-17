@@ -13,11 +13,15 @@ async function fetchAndApplyBlocklist() {
     // Parse the block list
     const blockList = await response.json();
     
+    // Ensure blockList is an array of URLs or patterns
+    if (!Array.isArray(blockList)) {
+      throw new Error('Block list is not an array.');
+    }
+
     // Apply the block list to block requests
+    chrome.webRequest.onBeforeRequest.removeListener(blockRequestHandler); // Remove previous listeners
     chrome.webRequest.onBeforeRequest.addListener(
-      function(details) {
-        return { cancel: true }; // Block the request
-      },
+      blockRequestHandler,
       { urls: blockList },
       ["blocking"]
     );
@@ -26,6 +30,11 @@ async function fetchAndApplyBlocklist() {
   } catch (error) {
     console.error('Error fetching or applying the blocklist:', error);
   }
+}
+
+// Request handler function
+function blockRequestHandler(details) {
+  return { cancel: true }; // Block the request
 }
 
 // Fetch and apply the blocklist when the extension is installed or updated
